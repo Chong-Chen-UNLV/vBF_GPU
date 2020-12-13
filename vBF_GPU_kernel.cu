@@ -52,15 +52,15 @@ __global__ void vBF_kernel(float* inputImage,
 	int16_t I_bar, J_bar;
 
 	float delta = 0;
-	//__shared__ int16_t sharedI_bar[warpSize];
-	//__shared__ int16_t sharedJ_bar[warpSize];
+	__shared__ int16_t sharedI_bar[warpSize];
+	__shared__ int16_t sharedJ_bar[warpSize];
 
 	int16_t J_block = blockIdx.x*widthA;
 	int16_t I_block = blockIdx.y*heightA;
 	int32_t I_warp = I_block + warpIdx/widthA;
 	int32_t J_warp = J_block + warpIdx%widthA;
 	
-	if(I_warp < imageWidth && J_warp < imageHeight){
+	if(I_warp < imageHeight && J_warp < imageWidth){
 		for(int16_t k = warpLane; k < numOfSpectral; k += warpSize){
 			r[k>>5] = inputImage[(I_warp*imageWidth + J_warp)*numOfSpectral+ k];		
 			__syncwarp();
@@ -76,8 +76,8 @@ __global__ void vBF_kernel(float* inputImage,
 		for(int16_t m = warpIdx; m < neighborSize; m+=warpPerBlock){
 			I_bar = I_blockMin + m/(neighborWidth);	
 			J_bar = J_blockMin + m%neighborWidth;
-			//sharedI_bar[warpIdx] = I_bar;
-			//sharedJ_bar[warpIdx] = J_bar;
+			sharedI_bar[warpIdx] = I_bar;
+			sharedJ_bar[warpIdx] = J_bar;
 			if(m + warpIdx < neighborSize){
 				for(int16_t k = warpLane; k < numOfSpectral; k+=warpSize){
 					sharedMem1[warpIdx*numOfSpectral + k] = inputImage[(I_bar*imageWidth+J_bar)*numOfSpectral + k];
@@ -96,8 +96,8 @@ __global__ void vBF_kernel(float* inputImage,
 
 				//Reuse of I_bar and J_bar register
 				//These register will be reset at line 50 
-				I_bar = I_blockMin + (iterIdx*warpPerBlock + i)/neighborWidth;
-				J_bar = J_blockMin + (iterIdx*warpPerBlock + i)%neighborWidth;
+				I_bar = sharedI_bar[i];
+				J_bar = sharedJ_bar[i];
 				__syncwarp();
 				if((I_warp - I_bar) >= -windowSize && (I_warp - I_bar) <= windowSize && 
 						(J_warp - J_bar) >= -windowSize && (J_warp - J_bar) <= windowSize){
@@ -120,10 +120,10 @@ __global__ void vBF_kernel(float* inputImage,
 				bufIdx += 1;
 				__syncwarp();
 			}
-			__syncthreads();
+			//__syncthreads();
 			if(sharedMem2[threadIdx.x] > 0){
-				I_bar = I_blockMin + (iterIdx*warpPerBlock + warpLane)/neighborWidth;
-				J_bar = J_blockMin + (iterIdx*warpPerBlock + warpLane)%neighborWidth;
+				I_bar = sharedI_bar[warpLane];
+				J_bar = sharedJ_bar[warpLane];
 				
 				sharedMem2[threadIdx.x] = exp(-sharedMem2[threadIdx.x]*sigmaInvR
 						- (pow(((float)I_bar - I_warp), 2) + pow(((float)J_bar - J_warp), 2))*sigmaInvD);
