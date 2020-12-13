@@ -42,6 +42,7 @@ __global__ void vBF_kernel(float* inputImage,
 
 	extern __shared__ volatile float sharedMem1[];  
 	__shared__ volatile float sharedMem2[warpPerBlock*warpSize];  
+	//__shared__ volatile float sharedMem3[warpPerBlock*warpSize];  
 	
 	float r[regSize] = {0};
 	float y_n[regSize] = {0};
@@ -54,15 +55,23 @@ __global__ void vBF_kernel(float* inputImage,
 	float delta = 0;
 	__shared__ int16_t sharedI_bar[warpSize];
 	__shared__ int16_t sharedJ_bar[warpSize];
-
-	int16_t J_block = blockIdx.x*widthA;
-	int16_t I_block = blockIdx.y*heightA;
-	int32_t I_warp = I_block + warpIdx/widthA;
-	int32_t J_warp = J_block + warpIdx%widthA;
+	__shared__ int16_t J_block;
+	__shared__ int16_t I_block;
+	__shared__ int16_t I_warp[warpSize]; 
+	__shared__ int16_t J_warp[warpSize];
+	if(threadIdx.x == 0){
+		J_block = blockIdx.x*widthA;
+		I_block = blockIdx.y*heightA;
+	}
+	__syncthreads();
+	if (warpLane == 0){
+		I_warp[warpIdx] = I_block + warpIdx/widthA;
+		J_warp[warpIdx] = J_block + warpIdx%widthA;
+	}
 	
-	if(I_warp < imageHeight && J_warp < imageWidth){
+	if(I_warp[warpIdx] < imageHeight && J_warp[warpIdx] < imageWidth){
 		for(int16_t k = warpLane; k < numOfSpectral; k += warpSize){
-			r[k>>5] = inputImage[(I_warp*imageWidth + J_warp)*numOfSpectral+ k];		
+			r[k>>5] = inputImage[(I_warp[warpIdx]*imageWidth + J_warp[warpIdx])*numOfSpectral+ k];		
 			__syncwarp();
 		}	
 		int16_t I_blockMin = max(0, I_block - windowSize);
@@ -99,8 +108,8 @@ __global__ void vBF_kernel(float* inputImage,
 				I_bar = sharedI_bar[i];
 				J_bar = sharedJ_bar[i];
 				__syncwarp();
-				if((I_warp - I_bar) >= -windowSize && (I_warp - I_bar) <= windowSize && 
-						(J_warp - J_bar) >= -windowSize && (J_warp - J_bar) <= windowSize){
+				if((I_warp[warpIdx] - I_bar) >= -windowSize && (I_warp[warpIdx] - I_bar) <= windowSize && 
+						(J_warp[warpIdx] - J_bar) >= -windowSize && (J_warp[warpIdx] - J_bar) <= windowSize){
 					delta = 0;
 					__syncwarp();
 #pragma unroll
@@ -126,7 +135,7 @@ __global__ void vBF_kernel(float* inputImage,
 				J_bar = sharedJ_bar[warpLane];
 				
 				sharedMem2[threadIdx.x] = exp(-sharedMem2[threadIdx.x]*sigmaInvR
-						- (pow(((float)I_bar - I_warp), 2) + pow(((float)J_bar - J_warp), 2))*sigmaInvD);
+						- (pow(((float)I_bar - I_warp[warpIdx]), 2) + pow(((float)J_bar - J_warp[warpIdx]), 2))*sigmaInvD);
 			}
 			__syncwarp();
 			for(int16_t i = 0; i < loopRange; ++i){
@@ -143,7 +152,7 @@ __global__ void vBF_kernel(float* inputImage,
 		//if(I_warp == 90 && J_warp == 60)
 		//	I_warp = I_warp + warpIdx - threadIdx.x/warpSize ;
 		for(int16_t k = warpLane; k < numOfSpectral; k+=warpSize){
-			outputImage[(I_warp*imageWidth + J_warp)*numOfSpectral+ k] = (y_n[k>>5] + r[k>>5])/(y_d + 1);
+			outputImage[(I_warp[warpIdx]*imageWidth + J_warp[warpIdx])*numOfSpectral+ k] = (y_n[k>>5] + r[k>>5])/(y_d + 1);
 		}
 	}	
 }
