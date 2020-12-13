@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <math.h>
@@ -132,7 +133,7 @@ int main(int argc, char **argv)
 	//read file
 	FILE *fp1=fopen(inputImageFile,"r");
 	fscanf(fp1, "%d %d %d", &imageWidth_, &imageHeight_, &numOfSpectral_);
-	if(imageHeight_ != imageHeight || imageWidth_ != imageWidth || numOfSpectral_ != numOfSpectral)
+	if(imageHeight_ != imageHeight || imageWidth_ != imageWidth || numOfSpectral_ < numOfSpectral)
 		exit(0);
 	uint32_t sizeI = imageWidth*imageHeight*numOfSpectral;
 	inputImage = (float *)malloc(sizeI*sizeof(float));
@@ -179,7 +180,7 @@ int main(int argc, char **argv)
 	timeByMs=((end1.tv_sec * 1000000 + end1.tv_usec)-(start1.tv_sec * 1000000 + start1.tv_usec))/1000;	
 	printf("time cost for 8 thread CPU is %f ms\n",timeByMs);
 	for(int i = 0; i < 5; i++){
-		printf("test sample 8-thread CPU %d, %d at level %d is %f\n", 10*i*i,  20*i, i, outputImage[i + (10*i*i*imageWidth + 20*i)*numOfSpectral]);
+		printf("test sample 8-thread CPU %d, %d at level %d is %f\n", 1000,  250, i, outputImage[i +  (1000*imageWidth + 200)*numOfSpectral]);
 	}
 
 	//------------start GPU testing----------
@@ -189,20 +190,21 @@ int main(int argc, char **argv)
 	cudaMalloc((void **) &outputImage_d, sizeI*sizeof(float));
 	
 	//-------------naive GPU testing------------	
-	gettimeofday(&start1, NULL);
-	cudaMemcpy(inputImage_d, inputImage2, sizeI*sizeof(float), cudaMemcpyHostToDevice);
-	naiveGPU(inputImage_d, outputImage_d, 
-			windowSize, sigmaR, sigmaD);
-	cudaMemcpy(outputImage2, outputImage_d, sizeI*sizeof(float), cudaMemcpyDeviceToHost);
-	cudaDeviceSynchronize();
-	gettimeofday(&end1, NULL);
-	timeByMs=((end1.tv_sec * 1000000 + end1.tv_usec)-(start1.tv_sec * 1000000 + start1.tv_usec))/1000;	
-	printf("time cost for naiveGPU is %f ms\n",timeByMs);
-	for(int i = 0; i < 5; i++){
-		printf("test sample naive GPU %d, %d at level %d is %f\n", 10*i*i,  20*i, i, outputImage2[i*imageHeight*imageWidth + 10*i*i*imageWidth + 20*i]);
-	}
+	//gettimeofday(&start1, NULL);
+	//cudaMemcpy(inputImage_d, inputImage2, sizeI*sizeof(float), cudaMemcpyHostToDevice);
+	//naiveGPU(inputImage_d, outputImage_d, 
+	//		windowSize, sigmaR, sigmaD);
+	//cudaMemcpy(outputImage2, outputImage_d, sizeI*sizeof(float), cudaMemcpyDeviceToHost);
+	//cudaDeviceSynchronize();
+	//gettimeofday(&end1, NULL);
+	//timeByMs=((end1.tv_sec * 1000000 + end1.tv_usec)-(start1.tv_sec * 1000000 + start1.tv_usec))/1000;	
+	//printf("time cost for naiveGPU is %f ms\n",timeByMs);
+	//for(int i = 0; i < 5; i++){
+	//	printf("test sample naive GPU %d, %d at level %d is %f\n", 10*i*i,  20*i, i, outputImage2[i*imageHeight*imageWidth + 10*i*i*imageWidth + 20*i]);
+	//}
 
 	//------------vBF_GPU testing------------	
+	memset(outputImage, 0, sizeof(float)*sizeI);
 	gettimeofday(&start1, NULL);
 	cudaMemcpy(inputImage_d, inputImage, sizeI*sizeof(float), cudaMemcpyHostToDevice);
 	vBF_GPU(inputImage_d, outputImage_d, 
@@ -213,7 +215,7 @@ int main(int argc, char **argv)
 	timeByMs=((end1.tv_sec * 1000000 + end1.tv_usec)-(start1.tv_sec * 1000000 + start1.tv_usec))/1000;	
 	printf("time cost for deblur is %f ms\n",timeByMs);
 	for(int i = 0; i < 5; i++){
-		printf("test sample vBF_CPU %d, %d at level %d is %f\n", 10*i*i,  20*i, i, outputImage[i + (10*i*i*imageWidth + 20*i)*numOfSpectral]);
+		printf("test sample vBF_CPU %d, %d at level %d is %f\n", 1000,  250, i , outputImage[i +  (1000*imageWidth + 200)*numOfSpectral]);
 	}
 	
 	//--------------------write part of results to file, you can change it to write the whole result-----------

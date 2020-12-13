@@ -10,8 +10,8 @@ const int warpSize = 32;
 const uint16_t warpPerBlock = widthA*heightA;
 const uint16_t imageWidth = 307;
 const uint16_t imageHeight = 1280;
-const uint16_t numOfSpectral = 191;
-const uint16_t regSize = numOfSpectral/warpSize + 1;
+const uint16_t numOfSpectral = 96;
+const uint16_t regSize = 3;
 
 void naiveGPU(float* inputImage, 
 		float* outputImage,
