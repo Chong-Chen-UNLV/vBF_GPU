@@ -58,6 +58,7 @@ __global__ void vBF_kernel(float* inputImage,
 	__shared__ int16_t I_block;
 	int16_t I_warp; 
 	int16_t J_warp;
+	uint16_t ii;
 	if(threadIdx.x == 0){
 		J_block = blockIdx.x*widthA;
 		I_block = blockIdx.y*heightA;
@@ -96,40 +97,39 @@ __global__ void vBF_kernel(float* inputImage,
 						+ (sharedJ_bar[warpLane] - J_warp)*(sharedJ_bar[warpLane] - J_warp);	
 				}
 			}
-			__syncwarp();
-			for(int16_t k = warpLane; k < numOfSpectral; k+=warpSize){
-				sharedMem1[warpIdx*numOfSpectral + k] = inputImage[(sharedI_bar[warpIdx]*imageWidth+sharedJ_bar[warpIdx])*numOfSpectral + k];
-				__syncwarp();
-			}
+			sharedMem1[warpIdx*numOfSpectral + warpLane] = 
+				inputImage[(sharedI_bar[warpIdx]*imageWidth+sharedJ_bar[warpIdx])*numOfSpectral + warpLane];
+			sharedMem1[warpIdx*numOfSpectral + warpSize + warpLane] = 
+				inputImage[(sharedI_bar[warpIdx]*imageWidth+sharedJ_bar[warpIdx])*numOfSpectral + warpSize +  warpLane];
+			sharedMem1[warpIdx*numOfSpectral + 2*warpSize + warpLane] = 
+				inputImage[(sharedI_bar[warpIdx]*imageWidth+sharedJ_bar[warpIdx])*numOfSpectral + 2*warpSize +  warpLane];
+			//for(int16_t k = warpLane; k < numOfSpectral; k+=warpSize){
+			//	sharedMem1[warpIdx*numOfSpectral + k] = inputImage[(sharedI_bar[warpIdx]*imageWidth+sharedJ_bar[warpIdx])*numOfSpectral + k];
+			//}
 			//in this kernel we define threadPerBlock = 1024, which means warpPerBlock == warpSize
 			//This is the best way to make exponent function more efficient
-			sharedMem2[threadIdx.x] = 0;
 			bufIdx = warpIdx*warpSize;//multiply by warpSize
-			iterIdx = m/warpPerBlock;
 			__syncthreads();
-			
-			for(int16_t i = 0; i < warpPerBlock; ++i){
-
-				//Reuse of I_bar and J_bar register
-				//These register will be reset at line 50 
-				//I_bar = sharedI_bar[i];
-				//J_bar = sharedJ_bar[i];
-				__syncwarp();
-				if(sharedMem3[warpIdx*warpSize + i]>0){
+			#pragma unroll	
+			for(int16_t i = 0; i < 16; ++i){
+				if(sharedMem3[(warpIdx<<5)+ i]>0){
+					ii = i*numOfSpectral+warpLane;
 					delta = 0;
+					delta += (sharedMem1[ii] - r[0])*
+						(sharedMem1[ii] - r[0]);
+					ii+=warpSize;
+					delta += (sharedMem1[ii] - r[1])*
+						(sharedMem1[ii] - r[1]);
+					ii+=warpSize;
+					delta += (sharedMem1[ii] - r[2])*
+						(sharedMem1[ii] - r[2]);
 					__syncwarp();
-					delta += (sharedMem1[i*numOfSpectral+warpLane] - r[0])*(sharedMem1[i*numOfSpectral+warpLane] - r[0]) ;
-					delta += (sharedMem1[i*numOfSpectral+warpSize+warpLane] - r[1])*(sharedMem1[i*numOfSpectral+warpSize+warpLane] - r[1]) ;
-					delta += (sharedMem1[i*numOfSpectral+2*warpSize+warpLane] - r[2])*(sharedMem1[i*numOfSpectral+2*warpSize+warpLane] - r[2]) ;
-					__syncwarp();
-					for (uint8_t offset = 16; offset > 0; offset /= 2)
+					for (uint8_t offset = 16; offset > 0; (offset=(offset>>1)))
 						delta += __shfl_down_sync(FULL_MASK, delta, offset);
-					__syncwarp();
 					if(warpLane == 0){
 						//sharedMem2 is now delta buffer
 						sharedMem2[bufIdx] = delta; 
 					}
-					__syncwarp();
 				}
 				bufIdx += 1;
 				__syncwarp();
@@ -140,16 +140,21 @@ __global__ void vBF_kernel(float* inputImage,
 						- sharedMem3[threadIdx.x]*sigmaInvD);
 			}
 			__syncwarp();
+			#pragma unroll
 			for(int16_t i = 0; i < warpPerBlock; ++i){
 				if(sharedMem2[(warpIdx<<5) + i] > 0){
-					y_n[0] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[i*numOfSpectral + warpLane];
-					y_n[1] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[i*numOfSpectral + warpSize + warpLane];
-					y_n[2] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[i*numOfSpectral + 2*warpSize + warpLane];
+					ii = i*numOfSpectral+warpLane;
+					y_n[0] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[ii];
+					ii += warpSize; 
+					y_n[1] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[ii];
+					ii += warpSize; 
+					y_n[2] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[ii];
 					y_d += sharedMem2[(warpIdx<<5) + i];
 				}
-				__syncwarp();
 			}
+			__syncwarp();
 			sharedMem3[threadIdx.x] = 0;
+			sharedMem2[threadIdx.x] = 0;
 			__syncthreads();
 		}
 		//if(I_warp == 90 && J_warp == 60)
