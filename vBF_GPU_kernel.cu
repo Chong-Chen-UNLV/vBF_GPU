@@ -119,10 +119,9 @@ __global__ void vBF_kernel(float* inputImage,
 						(J_warp - J_bar) >= -windowSize && (J_warp - J_bar) <= windowSize){
 					delta = 0;
 					__syncwarp();
-					#pragma unroll
-					for(int16_t k = warpLane; k < numOfSpectral; k += warpSize){
-						delta += (sharedMem1[i*numOfSpectral+k] - r[k>>5])*(sharedMem1[i*numOfSpectral+k] - r[k>>5]) ;
-					}
+					delta += (sharedMem1[i*numOfSpectral+warpLane] - r[0])*(sharedMem1[i*numOfSpectral+warpLane] - r[0]) ;
+					delta += (sharedMem1[i*numOfSpectral+warpSize+warpLane] - r[1])*(sharedMem1[i*numOfSpectral+warpSize+warpLane] - r[1]) ;
+					delta += (sharedMem1[i*numOfSpectral+2*warpSize+warpLane] - r[2])*(sharedMem1[i*numOfSpectral+2*warpSize+warpLane] - r[2]) ;
 					__syncwarp();
 					for (uint8_t offset = 16; offset > 0; offset /= 2)
 						delta += __shfl_down_sync(FULL_MASK, delta, offset);
@@ -144,10 +143,9 @@ __global__ void vBF_kernel(float* inputImage,
 			__syncwarp();
 			for(int16_t i = 0; i < warpPerBlock; ++i){
 				if(sharedMem2[(warpIdx<<5) + i] > 0){
-					#pragma unroll
-					for(int16_t k = warpLane; k < numOfSpectral; k += warpSize){
-						y_n[k>>5] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[i*numOfSpectral + k];
-					}
+					y_n[0] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[i*numOfSpectral + warpLane];
+					y_n[1] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[i*numOfSpectral + warpSize + warpLane];
+					y_n[2] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[i*numOfSpectral + 2*warpSize + warpLane];
 					y_d += sharedMem2[(warpIdx<<5) + i];
 				}
 				__syncwarp();

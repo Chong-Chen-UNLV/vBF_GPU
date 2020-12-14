@@ -6,17 +6,17 @@
 CC=g++
 
 CU_INC=-I/usr/local/cuda-9.2/include
-CUDA_LIB =-L/usr/local/cuda-9.2/lib64 -lcublas -lcusparse -lcudart 
+CUDA_LIB =-L/usr/local/cuda-9.2/lib64 -lcudart 
 
-CFLAGS= -g -Wall -gdwarf-2 -O3 -funroll-loops -fopenmp -I./mt-metis-0.6.0/include -I./include -L./ -L./lib -lmtmetis #-lopenblas -std=gnu99 
+CFLAGS= -g -Wall -gdwarf-2 -O3 -funroll-loops -fopenmp 
 	CUFLAGS = -O3 --use_fast_math -gencode arch=compute_61,code=sm_61
-	CFILES = $(wildcard *.c)
+	CFILES = $(wildcard *.cpp)
 	CUFILES = $(wildcard *.cu)
-	OBJECTS = $(CFILES:.c=.o)
+	OBJECTS = $(CFILES:.cpp=.o)
 CU_OBJECTS = $(CUFILES:.cu=.o)
 
 all : $(OBJECTS) $(CU_OBJECTS)
-	$(CC) -m64 $^ $(CFLAGS) $(CU_INC) $(CUDA_LIB)  -o Solver_test.out
+	$(CC) -m64 $^ $(CFLAGS) $(CU_INC) $(CUDA_LIB)  -o vBF_GPU.out
 
 $(OBJECTS) : $(CFILES) *.h
 	$(CC) -m64 $(CFILES) $(CFLAGS) $(CU_INC) $(CUDA_LIB) -c
