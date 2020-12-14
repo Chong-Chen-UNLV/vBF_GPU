@@ -42,7 +42,7 @@ __global__ void vBF_kernel(float* inputImage,
 
 	extern __shared__ volatile float sharedMem1[];  
 	__shared__ volatile float sharedMem2[warpPerBlock*warpSize];  
-	//__shared__ volatile float sharedMem3[warpPerBlock*warpSize];  
+	__shared__ volatile float sharedMem3[warpPerBlock*warpSize];  
 	
 	float r[regSize] = {0};
 	float y_n[regSize] = {0};
@@ -57,67 +57,74 @@ __global__ void vBF_kernel(float* inputImage,
 	__shared__ int16_t sharedJ_bar[warpSize];
 	__shared__ int16_t J_block;
 	__shared__ int16_t I_block;
-	__shared__ int16_t I_warp[warpSize]; 
-	__shared__ int16_t J_warp[warpSize];
+	int16_t I_warp; 
+	int16_t J_warp;
 	if(threadIdx.x == 0){
 		J_block = blockIdx.x*widthA;
 		I_block = blockIdx.y*heightA;
 	}
 	__syncthreads();
-	if (warpLane == 0){
-		I_warp[warpIdx] = I_block + warpIdx/widthA;
-		J_warp[warpIdx] = J_block + warpIdx%widthA;
-	}
+	I_warp = I_block + warpIdx/widthA;
+	J_warp = J_block + warpIdx%widthA;
+	__syncwarp();
 	
-	if(I_warp[warpIdx] < imageHeight && J_warp[warpIdx] < imageWidth){
+	if(I_warp < imageHeight && J_warp < imageWidth){
 		for(int16_t k = warpLane; k < numOfSpectral; k += warpSize){
-			r[k>>5] = inputImage[(I_warp[warpIdx]*imageWidth + J_warp[warpIdx])*numOfSpectral+ k];		
+			r[k>>5] = inputImage[(I_warp*imageWidth + J_warp)*numOfSpectral+ k];		
 			__syncwarp();
 		}	
-		int16_t I_blockMin = max(0, I_block - windowSize);
-		int16_t J_blockMin = max(0, J_block - windowSize);
-		int16_t neighborWidth = min(J_block + heightA + windowSize + 1, imageWidth) - J_blockMin;
-		int16_t neighborHeight = min(I_block + widthA + windowSize + 1, imageHeight) - I_blockMin;
+		int16_t I_blockMin = I_block - windowSize < 0 ? 0 : I_block-windowSize;
+		int16_t J_blockMin =  J_block - windowSize < 0 ? 0 : J_block-windowSize;
+		int16_t neighborWidth = ((J_block + widthA + windowSize) > imageWidth ? imageWidth :
+				(J_block + widthA + windowSize)) - J_blockMin;
+			
+		int16_t neighborHeight = ((I_block + heightA + windowSize) > imageHeight ? imageHeight:
+				(I_block + heightA + windowSize)) - I_blockMin;
 		int16_t neighborSize = neighborWidth*neighborHeight;
 		int16_t bufIdx; 
 		uint8_t iterIdx = 0;
 
 		for(int16_t m = warpIdx; m < neighborSize; m+=warpPerBlock){
-			I_bar = I_blockMin + m/(neighborWidth);	
-			J_bar = J_blockMin + m%neighborWidth;
-			sharedI_bar[warpIdx] = I_bar;
-			sharedJ_bar[warpIdx] = J_bar;
-			if(m + warpIdx < neighborSize){
-				for(int16_t k = warpLane; k < numOfSpectral; k+=warpSize){
-					sharedMem1[warpIdx*numOfSpectral + k] = inputImage[(I_bar*imageWidth+J_bar)*numOfSpectral + k];
-					__syncwarp();
-				}
+			sharedMem3[threadIdx.x] = 0;
+			if(warpLane == 0){
+				sharedI_bar[warpIdx] = I_blockMin + m/(neighborWidth);
+				sharedJ_bar[warpIdx] = J_blockMin + m%neighborWidth;
+			}
+			__syncthreads();
+			if(warpLane < warpPerBlock && m/warpPerBlock + warpLane < neighborSize){
+					sharedMem3[threadIdx.x] = 
+						(sharedI_bar[warpLane] - I_warp)*(sharedI_bar[warpLane] - I_warp)
+						+ (sharedJ_bar[warpLane] - J_warp)*(sharedJ_bar[warpLane] - J_warp);	
+			}
+			__syncwarp();
+			for(int16_t k = warpLane; k < numOfSpectral; k+=warpSize){
+				sharedMem1[warpIdx*numOfSpectral + k] = inputImage[(sharedI_bar[warpIdx]*imageWidth+sharedJ_bar[warpIdx])*numOfSpectral + k];
+				__syncwarp();
 			}
 			//in this kernel we define threadPerBlock = 1024, which means warpPerBlock == warpSize
 			//This is the best way to make exponent function more efficient
-			int16_t loopRange = min(neighborSize - m, warpPerBlock);	
 			sharedMem2[threadIdx.x] = 0;
 			bufIdx = warpIdx*warpSize;//multiply by warpSize
 			iterIdx = m/warpPerBlock;
 			__syncthreads();
 			
-			for(int16_t i = 0; i < loopRange; ++i){
+			for(int16_t i = 0; i < warpPerBlock; ++i){
 
 				//Reuse of I_bar and J_bar register
 				//These register will be reset at line 50 
 				I_bar = sharedI_bar[i];
 				J_bar = sharedJ_bar[i];
 				__syncwarp();
-				if((I_warp[warpIdx] - I_bar) >= -windowSize && (I_warp[warpIdx] - I_bar) <= windowSize && 
-						(J_warp[warpIdx] - J_bar) >= -windowSize && (J_warp[warpIdx] - J_bar) <= windowSize){
+				if((I_warp - I_bar) >= -windowSize && (I_warp - I_bar) <= windowSize && 
+						(J_warp - J_bar) >= -windowSize && (J_warp - J_bar) <= windowSize){
 					delta = 0;
 					__syncwarp();
-#pragma unroll
+					#pragma unroll
 					for(int16_t k = warpLane; k < numOfSpectral; k += warpSize){
-						delta += pow((sharedMem1[i*numOfSpectral+k] - r[k>>5]), 2);
+						delta += (sharedMem1[i*numOfSpectral+k] - r[k>>5])*(sharedMem1[i*numOfSpectral+k] - r[k>>5]) ;
 					}
 					__syncwarp();
-					for (int offset = 16; offset > 0; offset /= 2)
+					for (uint8_t offset = 16; offset > 0; offset /= 2)
 						delta += __shfl_down_sync(FULL_MASK, delta, offset);
 					__syncwarp();
 					if(warpLane == 0){
@@ -131,15 +138,13 @@ __global__ void vBF_kernel(float* inputImage,
 			}
 			//__syncthreads();
 			if(sharedMem2[threadIdx.x] > 0){
-				I_bar = sharedI_bar[warpLane];
-				J_bar = sharedJ_bar[warpLane];
-				
-				sharedMem2[threadIdx.x] = exp(-sharedMem2[threadIdx.x]*sigmaInvR
-						- (pow(((float)I_bar - I_warp[warpIdx]), 2) + pow(((float)J_bar - J_warp[warpIdx]), 2))*sigmaInvD);
+				sharedMem2[threadIdx.x] = expf(-sharedMem2[threadIdx.x]*sigmaInvR
+						- sharedMem3[threadIdx.x]*sigmaInvD);
 			}
 			__syncwarp();
-			for(int16_t i = 0; i < loopRange; ++i){
+			for(int16_t i = 0; i < warpPerBlock; ++i){
 				if(sharedMem2[(warpIdx<<5) + i] > 0){
+					#pragma unroll
 					for(int16_t k = warpLane; k < numOfSpectral; k += warpSize){
 						y_n[k>>5] += sharedMem2[(warpIdx<<5) + i]*sharedMem1[i*numOfSpectral + k];
 					}
@@ -152,7 +157,7 @@ __global__ void vBF_kernel(float* inputImage,
 		//if(I_warp == 90 && J_warp == 60)
 		//	I_warp = I_warp + warpIdx - threadIdx.x/warpSize ;
 		for(int16_t k = warpLane; k < numOfSpectral; k+=warpSize){
-			outputImage[(I_warp[warpIdx]*imageWidth + J_warp[warpIdx])*numOfSpectral+ k] = (y_n[k>>5] + r[k>>5])/(y_d + 1);
+			outputImage[(I_warp*imageWidth + J_warp)*numOfSpectral+ k] = (y_n[k>>5] + r[k>>5])/(y_d + 1);
 		}
 	}	
 }
