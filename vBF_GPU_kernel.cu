@@ -58,6 +58,7 @@ __global__ void vBF_kernel(float* inputImage,
 	__shared__ int16_t I_block;
 	int16_t I_warp; 
 	int16_t J_warp;
+	uint8_t offset;
 	uint16_t ii;
 	if(threadIdx.x == 0){
 		J_block = blockIdx.x*widthA;
@@ -111,7 +112,7 @@ __global__ void vBF_kernel(float* inputImage,
 			bufIdx = warpIdx*warpSize;//multiply by warpSize
 			__syncthreads();
 			#pragma unroll	
-			for(int16_t i = 0; i < 16; ++i){
+			for(int16_t i = 0; i < warpPerBlock; ++i){
 				if(sharedMem3[(warpIdx<<5)+ i]>0){
 					ii = i*numOfSpectral+warpLane;
 					delta = 0;
@@ -124,8 +125,16 @@ __global__ void vBF_kernel(float* inputImage,
 					delta += (sharedMem1[ii] - r[2])*
 						(sharedMem1[ii] - r[2]);
 					__syncwarp();
-					for (uint8_t offset = 16; offset > 0; (offset=(offset>>1)))
-						delta += __shfl_down_sync(FULL_MASK, delta, offset);
+					offset = 16;	
+					delta += __shfl_down_sync(FULL_MASK, delta, offset);
+					offset = 8;
+					delta += __shfl_down_sync(FULL_MASK, delta, offset);
+					offset = 4;
+					delta += __shfl_down_sync(FULL_MASK, delta, offset);
+					offset = 2;
+					delta += __shfl_down_sync(FULL_MASK, delta, offset);
+					offset = 1;
+					delta += __shfl_down_sync(FULL_MASK, delta, offset);
 					if(warpLane == 0){
 						//sharedMem2 is now delta buffer
 						sharedMem2[bufIdx] = delta; 
