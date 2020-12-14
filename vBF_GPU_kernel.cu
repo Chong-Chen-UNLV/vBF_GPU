@@ -50,7 +50,6 @@ __global__ void vBF_kernel(float* inputImage,
 
 	int16_t warpLane = threadIdx.x - ((threadIdx.x>>5)<<5); ;
 	int8_t warpIdx = threadIdx.x>>5;
-	int16_t I_bar, J_bar;
 
 	float delta = 0;
 	__shared__ int16_t sharedI_bar[warpSize];
@@ -82,19 +81,20 @@ __global__ void vBF_kernel(float* inputImage,
 				(I_block + heightA + windowSize)) - I_blockMin;
 		int16_t neighborSize = neighborWidth*neighborHeight;
 		int16_t bufIdx; 
-		uint8_t iterIdx = 0;
 
 		for(int16_t m = warpIdx; m < neighborSize; m+=warpPerBlock){
-			sharedMem3[threadIdx.x] = 0;
 			if(warpLane == 0){
 				sharedI_bar[warpIdx] = I_blockMin + m/(neighborWidth);
 				sharedJ_bar[warpIdx] = J_blockMin + m%neighborWidth;
 			}
 			__syncthreads();
 			if(warpLane < warpPerBlock && m/warpPerBlock + warpLane < neighborSize){
+				if(abs(sharedI_bar[warpLane] - I_warp) <= windowSize &&
+						abs(sharedJ_bar[warpLane] - J_warp) <= windowSize){
 					sharedMem3[threadIdx.x] = 
 						(sharedI_bar[warpLane] - I_warp)*(sharedI_bar[warpLane] - I_warp)
 						+ (sharedJ_bar[warpLane] - J_warp)*(sharedJ_bar[warpLane] - J_warp);	
+				}
 			}
 			__syncwarp();
 			for(int16_t k = warpLane; k < numOfSpectral; k+=warpSize){
@@ -112,11 +112,10 @@ __global__ void vBF_kernel(float* inputImage,
 
 				//Reuse of I_bar and J_bar register
 				//These register will be reset at line 50 
-				I_bar = sharedI_bar[i];
-				J_bar = sharedJ_bar[i];
+				//I_bar = sharedI_bar[i];
+				//J_bar = sharedJ_bar[i];
 				__syncwarp();
-				if((I_warp - I_bar) >= -windowSize && (I_warp - I_bar) <= windowSize && 
-						(J_warp - J_bar) >= -windowSize && (J_warp - J_bar) <= windowSize){
+				if(sharedMem3[warpIdx*warpSize + i]>0){
 					delta = 0;
 					__syncwarp();
 					delta += (sharedMem1[i*numOfSpectral+warpLane] - r[0])*(sharedMem1[i*numOfSpectral+warpLane] - r[0]) ;
@@ -150,6 +149,7 @@ __global__ void vBF_kernel(float* inputImage,
 				}
 				__syncwarp();
 			}
+			sharedMem3[threadIdx.x] = 0;
 			__syncthreads();
 		}
 		//if(I_warp == 90 && J_warp == 60)
