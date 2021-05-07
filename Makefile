@@ -8,8 +8,8 @@ CC=g++
 CU_INC=-I/usr/local/cuda-9.2/include
 CUDA_LIB =-L/usr/local/cuda-9.2/lib64 -lcudart 
 
-CFLAGS= -g -Wall -gdwarf-2 -O3 -funroll-loops -fopenmp 
-	CUFLAGS = -O3 --use_fast_math -gencode arch=compute_61,code=sm_61
+CFLAGS= -Wall -gdwarf-2 -O3 -funroll-loops -fopenmp 
+	CUFLAGS = -gencode arch=compute_61,code=sm_61
 	CFILES = $(wildcard *.cpp)
 	CUFILES = $(wildcard *.cu)
 	OBJECTS = $(CFILES:.cpp=.o)
@@ -22,7 +22,7 @@ $(OBJECTS) : $(CFILES) *.h
 	$(CC) -m64 $(CFILES) $(CFLAGS) $(CU_INC) $(CUDA_LIB) -c
 
 $(CU_OBJECTS) : $(CUFILES) *.h
-	nvcc -c -g -G $(CUFILES) $(CUFLAGS)
+	nvcc -c $(CUFILES) $(CUFLAGS)
 
 clean :
 	rm *.o

@@ -29,8 +29,8 @@ static void examineBF(float* inputImage,
 	int32_t colEnd = std::min((int)imageWidth - 1, colC + (int)windowSize);
 	int iter = 0;
 	FILE* ft;
-	if(rowC == 90 && colC == 60)
-		ft = fopen("row90col60.txt", "w");
+	//if(rowC == 300 && colC == 300)
+	//	ft = fopen("row200col200.txt", "w");
 	for(int32_t row = rowStart; row <= rowEnd; ++row){
 		for(int32_t col = colStart; col <= colEnd; ++col){
 			delta = 0;
@@ -40,8 +40,8 @@ static void examineBF(float* inputImage,
 			}
 			omega = exp(-delta*sigmaInvR - (pow(rowC - row, 2) + pow(colC - col, 2))*sigmaInvD);
 			y_d += omega;
-			if(rowC == 90 && colC == 60)
-				fprintf(ft, "at %d th iter with row = %d col = %d omega is %f, y_d is %f\n", iter, row, col, delta, y_d);
+			//if(rowC == 300 && colC == 300)
+			//	fprintf(ft, "at %d th iter with row = %d col = %d omega is %f, y_d is %f\n", iter, row, col, omega, y_d);
 						
 			iter += 1;
 			for(uint32_t level = 0; level < numOfSpectral; ++level){
@@ -52,8 +52,8 @@ static void examineBF(float* inputImage,
 	for(uint32_t level = 0; level < numOfSpectral; ++level){
 		outputImage[(rowC*imageWidth + colC)*numOfSpectral + level] = y_n[level]/y_d;
 	}
-	if(rowC == 90 && colC == 60)
-		fclose(ft);
+	//if(rowC == 300 && colC == 300)
+	//	fclose(ft);
 }
 static void BF_CPU(float* inputImage, float* outputImage, 
 		 const int16_t windowSize, const float sigmaR, 
@@ -63,10 +63,12 @@ static void BF_CPU(float* inputImage, float* outputImage,
 	float sigmaInvD = .5/pow(sigmaD, 2);
 	for(int32_t row = 0; row < 1; ++row){
 		for(int32_t col = 0; col < imageWidth; ++col){
-			examineBF(inputImage, outputImage,
-				row, col, windowSize, 
-				sigmaInvR,sigmaInvD);
-		}	
+			for(int32_t row = 0; row < imageHeight; ++row){
+				examineBF(inputImage, outputImage,
+						row, col, windowSize, 
+						sigmaInvR,sigmaInvD);
+			}	
+		}
 		//printf("row %d finished\n", row);
 	}
 }
@@ -128,7 +130,7 @@ int main(int argc, char **argv)
 
 	float *inputImage, *outputImage;
 	float *inputImage2, *outputImage2;
-	float sigmaR = 15, sigmaD=20.5;
+	float sigmaR = 20, sigmaD=20.5;
 
 	//read file
 	FILE *fp1=fopen(inputImageFile,"r");
@@ -143,12 +145,14 @@ int main(int argc, char **argv)
 	
 	float val;
 	uint32_t row, col, level;
+	int readSize = 0;
 	
 	//please notice that the image txt file is stacked by layers i.e. I(i, j, k) address is I[k*imageSize+i*row+j]
 	//we reorder the order to make it more friendly for memory coalescing
 	for(uint32_t i=0; i < sizeI; i++){
-		fscanf(fp1,"%f",&val);
-		val = val/4096;
+		if(fscanf(fp1,"%f",&val) == EOF)
+			printf("sizeI is %d EOF at %d\n", sizeI, i);
+		val = val/1024;
 		level = i/(imageWidth*imageHeight);
 		row = (i - (level*imageWidth*imageHeight))/imageWidth;
 		col = (i - (level*imageWidth*imageHeight))%imageWidth;
@@ -170,18 +174,19 @@ int main(int argc, char **argv)
 	//timeByMs=((end1.tv_sec * 1000000 + end1.tv_usec)-(start1.tv_sec * 1000000 + start1.tv_usec))/1000;	
 	//printf("time cost for CPU is %f ms\n",timeByMs);
 	//for(int i = 0; i < 5; i++){
-	//	printf("test sample CPU %i is %f\n", i*1000+2*i*200+i*imageWidth*imageHeight, outputImage[i*1000+2*i*200+i*imageWidth*imageHeight]);
+	//	printf("test simple CPU %d, %d at level %d is %f\n", 300,  300, i, outputImage[i +  (300*imageWidth + 300)*numOfSpectral]);
 	//}
+	
 	//-------------8 thread CPU runtime----------------
-	gettimeofday(&start1, NULL);
-	BF_CPU8T(inputImage, outputImage, 
-			windowSize, sigmaR, sigmaD);
-	gettimeofday(&end1, NULL);
-	timeByMs=((end1.tv_sec * 1000000 + end1.tv_usec)-(start1.tv_sec * 1000000 + start1.tv_usec))/1000;	
-	printf("time cost for 8 thread CPU is %f ms\n",timeByMs);
-	for(int i = 0; i < 5; i++){
-		printf("test sample 8-thread CPU %d, %d at level %d is %f\n", 1000,  250, i, outputImage[i +  (1000*imageWidth + 200)*numOfSpectral]);
-	}
+	//gettimeofday(&start1, NULL);
+	//BF_CPU8T(inputImage, outputImage, 
+	//		windowSize, sigmaR, sigmaD);
+	//gettimeofday(&end1, NULL);
+	//timeByMs=((end1.tv_sec * 1000000 + end1.tv_usec)-(start1.tv_sec * 1000000 + start1.tv_usec))/1000;	
+	//printf("time cost for 8 thread CPU is %f ms\n",timeByMs);
+	//for(int i = 0; i < 5; i++){
+	//	printf("test 8-thread CPU %d, %d at level %d is %f\n", 300,  300, i, outputImage[i +  (300*imageWidth + 300)*numOfSpectral]);
+	//}
 
 	//------------start GPU testing----------
 
@@ -200,13 +205,13 @@ int main(int argc, char **argv)
 	//timeByMs=((end1.tv_sec * 1000000 + end1.tv_usec)-(start1.tv_sec * 1000000 + start1.tv_usec))/1000;	
 	//printf("time cost for naiveGPU is %f ms\n",timeByMs);
 	//for(int i = 0; i < 5; i++){
-	//	printf("test sample naive GPU %d, %d at level %d is %f\n", 10*i*i,  20*i, i, outputImage2[i*imageHeight*imageWidth + 10*i*i*imageWidth + 20*i]);
+	//	printf("test sample naive GPU %d, %d at level %d is %f\n", 300,  300, i, outputImage2[i*imageHeight*imageWidth + 300*imageWidth + 300]);
 	//}
 
 	//------------vBF_GPU testing------------	
+	cudaMemcpy(inputImage_d, inputImage, sizeI*sizeof(float), cudaMemcpyHostToDevice);
 	memset(outputImage, 0, sizeof(float)*sizeI);
 	gettimeofday(&start1, NULL);
-	cudaMemcpy(inputImage_d, inputImage, sizeI*sizeof(float), cudaMemcpyHostToDevice);
 	vBF_GPU(inputImage_d, outputImage_d, 
 			windowSize, sigmaR, sigmaD);
 	cudaMemcpy(outputImage, outputImage_d, sizeI*sizeof(float), cudaMemcpyDeviceToHost);
@@ -215,7 +220,7 @@ int main(int argc, char **argv)
 	timeByMs=((end1.tv_sec * 1000000 + end1.tv_usec)-(start1.tv_sec * 1000000 + start1.tv_usec))/1000;	
 	printf("time cost for deblur is %f ms\n",timeByMs);
 	for(int i = 0; i < 5; i++){
-		printf("test sample vBF_CPU %d, %d at level %d is %f\n", 1000,  250, i , outputImage[i +  (1000*imageWidth + 200)*numOfSpectral]);
+		printf("test sample vBF_CPU %d, %d at level %d is %f\n", 300,  300, i , outputImage[i +  (300*imageWidth + 300)*numOfSpectral]);
 	}
 	
 	//--------------------write part of results to file, you can change it to write the whole result-----------
