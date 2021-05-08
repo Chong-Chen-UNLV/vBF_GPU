@@ -11,7 +11,7 @@
 const int imageWidth  = 307; 
 const int imageHeight =  1280;
 const int numOfSpectral = 191; 
-#define regSize 6 
+const int regSize = (numOfSpectral+warpSize-1)/warpSize; 
 
 void naiveGPU(float* inputImage, 
 		float* outputImage,
