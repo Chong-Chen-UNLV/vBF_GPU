@@ -1,8 +1,20 @@
 # vBF_GPU
 
-The optimized GPU kernel for vector bilateral filtering on hyperspectral image 
-The image width/heigth/spectrum is defined in vBF_GPH.h file
-This code is used for test the dc image from 
+An optimized GPU kernel for vector bilateral filtering on hyperspectral image.
+The details of the algorithm is described in:
+@article{chen2021acceleration,
+  title={Acceleration of vector bilateral filtering for hyperspectral imaging with GPU},
+  author={Chen, Chong},
+  journal={International Journal of Circuit Theory and Applications},
+  volume={49},
+  number={5},
+  pages={1502--1514},
+  year={2021},
+  publisher={Wiley Online Library}
+}
+In the example, the image width/heigth/spectrum is defined in vBF_GPH.h file.
+
+This code can be used for test the dc image from 
 
 http://cobweb.ecn.purdue.edu/~biehl/Hyperspectral_Project.zip
 
