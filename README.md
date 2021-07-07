@@ -12,6 +12,8 @@ The details of the algorithm is described in:
   year={2021},
   publisher={Wiley Online Library}
 }
+
+
 In the example, the image width/heigth/spectrum is defined in vBF_GPH.h file.
 
 This code can be used for test the dc image from 
