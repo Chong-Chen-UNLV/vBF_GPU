@@ -6,15 +6,15 @@ This code is used for test the dc image from
 
 http://cobweb.ecn.purdue.edu/~biehl/Hyperspectral_Project.zip
 
-To test the kernel please download convet the file form above link, copy the dc.tif file 
-to the current folder, and convert the hyperspectral image to a txt file using 
+To test the kernel please download the file from above link, copy the dc.tif file 
+to the same folder of vBF_GPU executable file, and convert the hyperspectral image to a txt file using 
 ```
 python convertTIF2TXT.py
 ```
-You will find a dc.txt file in this folder Then run the program using 
+You will find a dc.txt file in this folder. Then run the program using 
 
 ```
-./vBF_GPU.oug -i [inputfile] -o [outputfile] -w [windowSize]
+./vBF_GPU.out -i [inputfile] -o [outputfile] -w [windowSize]
 ```
 in this test case, if the window size is 21 by 21, the arguments is:
 
