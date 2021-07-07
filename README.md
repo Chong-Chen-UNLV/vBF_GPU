@@ -22,7 +22,8 @@ in this test case, if the window size is 21 by 21, the arguments is:
 ./vBF_GPU.oug -i dc.txt -o dc_out.txt -w 21
 ```
 
-You can also using other python script to conver the .mat file from other
-hypterspectral dataset to the .txt file and conduct the experiment
+The python script convertMat2TXT.py in this project is provided to convert the .mat file from other
+hypterspectral dataset to the .txt file, this script can be used to verify our implemtation in other
+datasets. 
 
 
